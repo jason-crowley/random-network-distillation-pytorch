@@ -29,7 +29,7 @@ def main():
 
     env.close()
 
-    is_render = True
+    is_render = False
     model_path = 'models/{}.model'.format(env_id)
     predictor_path = 'models/{}.pred'.format(env_id)
     target_path = 'models/{}.target'.format(env_id)
