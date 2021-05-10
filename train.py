@@ -147,6 +147,10 @@ def main():
             next_obs = []
     print('End to initalize...')
 
+    accumulated_worker_episode_reward = np.zeros((num_worker,))
+    episode_rewards = []
+    step_rewards = []
+
     while True:
         total_state, total_reward, total_done, total_next_state, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
             [], [], [], [], [], [], [], [], [], [], []
@@ -175,6 +179,22 @@ def main():
             dones = np.hstack(dones)
             real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
+
+            step_rewards.append(list(rewards))
+
+            accumulated_worker_episode_reward += rewards
+            if np.sum(dones > 0):
+                print("###")
+                print(dones)
+                print(accumulated_worker_episode_reward)
+                print(accumulated_worker_episode_reward[dones])
+
+            episode_rewards.extend(accumulated_worker_episode_reward[dones])
+            accumulated_worker_episode_reward *= (1 - dones)
+
+            if np.sum(dones > 0):
+                print(accumulated_worker_episode_reward)
+                print()
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
@@ -218,7 +238,6 @@ def main():
         total_action = np.stack(total_action).swapaxes(0, 1)
         total_done = np.stack(total_done).swapaxes(0, 1)
         total_next_obs = np.stack(total_next_obs).swapaxes(0, 1)
-        total_next_ram = np.stack(total_next_ram).swapaxes(0, 1)
         total_ext_values = np.stack(total_ext_values).swapaxes(0, 1)
         total_int_values = np.stack(total_int_values).swapaxes(0, 1)
         total_logging_policy = np.vstack(total_policy_np)
@@ -226,6 +245,8 @@ def main():
         total_state = total_state.reshape([-1, 4, 84, 84])
         total_action = total_action.reshape([-1])
         total_next_obs = total_next_obs.reshape([-1, 1, 84, 84])
+
+
 
         # Step 2. calculate intrinsic reward
         # running mean intrinsic reward
