@@ -2,12 +2,26 @@ from agents import *
 from envs import *
 from utils import *
 from config import *
+
 from torch.multiprocessing import Pipe
-
 from tensorboardX import SummaryWriter
-
 import numpy as np
+import gzip
+import time
+import pickle
 
+def pickle_dump(path, buffer):
+    while True:
+        print(f"[+] Dumping buffer to '{path}'... ", end="")
+        try:
+            with gzip.open(path, "ab") as f:
+                pickle.dump(buffer, f)  # type: ignore
+            step_rewards = []
+            print("Done")
+            break
+        except:
+            print("Failed")
+            time.sleep(2) 
 
 def main():
     print({section: dict(config[section]) for section in config.sections()})
@@ -180,21 +194,13 @@ def main():
             real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
 
-            step_rewards.append(list(rewards))
+            step_rewards.append(rewards[0])
 
             accumulated_worker_episode_reward += rewards
-            if np.sum(dones > 0):
-                print("###")
-                print(dones)
-                print(accumulated_worker_episode_reward)
-                print(accumulated_worker_episode_reward[dones])
-
+            dones[1:] = False
             episode_rewards.extend(accumulated_worker_episode_reward[dones])
             accumulated_worker_episode_reward *= (1 - dones)
-
-            if np.sum(dones > 0):
-                print(accumulated_worker_episode_reward)
-                print()
+            accumulated_worker_episode_reward[1:] = 0
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
@@ -226,6 +232,16 @@ def main():
                 sample_rall = 0
                 sample_step = 0
                 sample_i_rall = 0
+        
+        if len(step_rewards) > 1000:
+            path = f"logs/{env_id}_steprewards.pkl.gz"
+            pickle_dump(path, step_rewards)
+            step_rewards = []
+
+        if len(episode_rewards) > 100:
+            path = f"logs/{env_id}_episoderewards.pkl.gz"
+            pickle_dump(path, episode_rewards)
+            episode_rewards = []
 
         # calculate last next value
         _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
@@ -233,6 +249,16 @@ def main():
         total_int_values.append(value_int)
         # --------------------------------------------------
 
+        total_state = np.stack(total_state).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, 84, 84])
+        total_reward = np.stack(total_reward).transpose().clip(-1, 1)
+        total_action = np.stack(total_action).transpose().reshape([-1])
+        total_done = np.stack(total_done).transpose()
+        total_next_obs = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4]).reshape([-1, 1, 84, 84])
+        total_ext_values = np.stack(total_ext_values).transpose()
+        total_int_values = np.stack(total_int_values).transpose()
+        total_logging_policy = np.vstack(total_policy_np)
+
+        """
         total_state = np.stack(total_state).swapaxes(0, 1)
         total_reward = np.stack(total_reward).swapaxes(0, 1).clip(-1, 1)
         total_action = np.stack(total_action).swapaxes(0, 1)
@@ -245,12 +271,12 @@ def main():
         total_state = total_state.reshape([-1, 4, 84, 84])
         total_action = total_action.reshape([-1])
         total_next_obs = total_next_obs.reshape([-1, 1, 84, 84])
-
-
+        """
 
         # Step 2. calculate intrinsic reward
         # running mean intrinsic reward
-        total_int_reward = np.stack(total_int_reward).swapaxes(0, 1)
+        total_int_reward = np.stack(total_int_reward).transpose()
+        #total_int_reward = np.stack(total_int_reward).swapaxes(0, 1)
         total_reward_per_env = np.array([discounted_reward.update(reward_per_step) for reward_per_step in
                                          total_int_reward.T])
         mean, std, count = np.mean(total_reward_per_env), np.std(total_reward_per_env), len(total_reward_per_env)
