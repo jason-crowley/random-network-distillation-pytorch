@@ -49,7 +49,7 @@ def main():
     predictor_path = 'models/{}.pred'.format(env_id)
     target_path = 'models/{}.target'.format(env_id)
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(logdir=f"runs/{env_id}")
 
     use_cuda = default_config.getboolean('UseGPU')
     use_gae = default_config.getboolean('UseGAE')
@@ -233,12 +233,12 @@ def main():
                 sample_step = 0
                 sample_i_rall = 0
 
-            writer.add_scalar('data/avg_reward_per_step', np.mean(reward), global_step + num_worker * (cur_step - num_step))
+            writer.add_scalar('data/avg_reward_per_step', np.mean(rewards), global_step + num_worker * (cur_step - num_step))
             
         while all(episode_rewards):
             global_ep += 1
             avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
-            writer.add_Scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
+            writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
         
         if len(step_rewards[0]) > 100:
             path = f"logs/{env_id}_steprewards.pkl.gz"
