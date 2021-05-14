@@ -162,8 +162,9 @@ def main():
     print('End to initalize...')
 
     accumulated_worker_episode_reward = np.zeros((num_worker,))
-    episode_rewards = []
-    step_rewards = []
+    episode_rewards = [[] for _ in range(num_worker)]
+    step_rewards = [[] for _ in range(num_worker)]
+    global_ep = 0
 
     while True:
         total_state, total_reward, total_done, total_next_state, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
@@ -172,7 +173,7 @@ def main():
         global_update += 1
 
         # Step 1. n-step rollout
-        for _ in range(num_step):
+        for cur_step in range(num_step):
             actions, value_ext, value_int, policy = agent.get_action(np.float32(states) / 255.)
 
             for parent_conn, action in zip(parent_conns, actions):
@@ -194,13 +195,12 @@ def main():
             real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
 
-            step_rewards.append(rewards[0])
-
             accumulated_worker_episode_reward += rewards
-            dones[1:] = False
-            episode_rewards.extend(accumulated_worker_episode_reward[dones])
-            accumulated_worker_episode_reward *= (1 - dones)
-            accumulated_worker_episode_reward[1:] = 0
+            for i in range(len(rewards)):
+                step_rewards[i].append(rewards[i])
+                if real_dones[i]:
+                    episode_rewards[i].append(accumulated_worker_episode_reward[i])
+                    accumulated_worker_episode_reward[i] = 0
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
@@ -232,16 +232,23 @@ def main():
                 sample_rall = 0
                 sample_step = 0
                 sample_i_rall = 0
+
+            writer.add_scalar('data/avg_reward_per_step', np.mean(reward), global_step + num_worker * (cur_step - num_step))
+            
+        while all(episode_rewards):
+            global_ep += 1
+            avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
+            writer.add_Scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
         
-        if len(step_rewards) > 1000:
+        if len(step_rewards[0]) > 100:
             path = f"logs/{env_id}_steprewards.pkl.gz"
             pickle_dump(path, step_rewards)
-            step_rewards = []
+            step_rewards = [[] for _ in range(num_worker)]
 
-        if len(episode_rewards) > 100:
+        if len(episode_rewards[0]) > 5:
             path = f"logs/{env_id}_episoderewards.pkl.gz"
             pickle_dump(path, episode_rewards)
-            episode_rewards = []
+            episode_rewards = [[] for _ in range(num_worker)]
 
         # calculate last next value
         _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
@@ -257,21 +264,6 @@ def main():
         total_ext_values = np.stack(total_ext_values).transpose()
         total_int_values = np.stack(total_int_values).transpose()
         total_logging_policy = np.vstack(total_policy_np)
-
-        """
-        total_state = np.stack(total_state).swapaxes(0, 1)
-        total_reward = np.stack(total_reward).swapaxes(0, 1).clip(-1, 1)
-        total_action = np.stack(total_action).swapaxes(0, 1)
-        total_done = np.stack(total_done).swapaxes(0, 1)
-        total_next_obs = np.stack(total_next_obs).swapaxes(0, 1)
-        total_ext_values = np.stack(total_ext_values).swapaxes(0, 1)
-        total_int_values = np.stack(total_int_values).swapaxes(0, 1)
-        total_logging_policy = np.vstack(total_policy_np)
-
-        total_state = total_state.reshape([-1, 4, 84, 84])
-        total_action = total_action.reshape([-1])
-        total_next_obs = total_next_obs.reshape([-1, 1, 84, 84])
-        """
 
         # Step 2. calculate intrinsic reward
         # running mean intrinsic reward
