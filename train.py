@@ -2,13 +2,16 @@ from agents import *
 from envs import *
 from utils import *
 from config import *
+from drn_model import DeepRelNov
 
 from torch.multiprocessing import Pipe
 from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
 import numpy as np
 import gzip
 import time
 import pickle
+
 
 def pickle_dump(path, buffer):
     while True:
@@ -107,6 +110,7 @@ def main():
         use_gae=use_gae,
         use_noisy_net=use_noisy_net
     )
+    drn_model = DeepRelNov(agent.rnd, input_size, output_size)
 
     if is_load_model:
         print('load model...')
@@ -319,6 +323,16 @@ def main():
             torch.save(agent.model.state_dict(), model_path)
             torch.save(agent.rnd.predictor.state_dict(), predictor_path)
             torch.save(agent.rnd.target.state_dict(), target_path)
+
+        #############################
+        drn_model.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+
+        if global_step % 1 == 0:
+            states = drn_model.get_subgoals(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+            for i, state in enumerate(states):
+                plt.imshow(state)
+                plt.savefig(f"subgoal_{global_step}_{i}.png")
+
 
 
 if __name__ == '__main__':
