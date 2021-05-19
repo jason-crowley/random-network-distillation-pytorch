@@ -1,3 +1,5 @@
+from collections import deque
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -102,13 +104,14 @@ class DeepRelNov:
 
         self.n_l = 7
         self.novelty_rnd = RNDAgent(novelty_rnd, use_cuda=True)
-        self.novelty_threshold = 0.15
+        self.novelty_threshold = 1.5
         self.frequency_rnd = RNDAgent(RNDModel(input_size, output_size), use_cuda=True)
-        self.frequency_threshold = 0.68
+        self.frequency_threshold = 60
+        self.nov_state_buffer = deque(maxlen=100)
 
     def train(self, trajectory):
-        self.novelty_rnd.train(trajectory)
-        self.frequency_rnd.train(self.get_rel_nov_states(trajectory))
+        self.nov_state_buffer.extend(self.get_rel_nov_states(trajectory))
+        self.frequency_rnd.train(self.nov_state_buffer)
 
     def get_rel_nov_states(self, trajectory):
         trajectory_tensor = torch.FloatTensor(trajectory).to(self.device)
@@ -128,10 +131,10 @@ class DeepRelNov:
                 rel_nov_states.append(obs)
         return rel_nov_states
 
-
     def get_subgoals(self, trajectory):
         subgoals = []
         for obs in self.get_rel_nov_states(trajectory):
-            if self.frequency_rnd.forward(obs) < self.frequency_threshold:
+            freq = self.frequency_rnd.forward(torch.FloatTensor([obs]).to(self.device))
+            if freq < self.frequency_threshold:
                 subgoals.append(obs)
         return subgoals

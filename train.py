@@ -328,10 +328,11 @@ def main():
         drn_model.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
 
         if global_step % 1 == 0:
-            states = drn_model.get_subgoals(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
-            for i, state in enumerate(states):
-                plt.imshow(state)
-                plt.savefig(f"subgoal_{global_step}_{i}.png")
+            subgoals = drn_model.get_subgoals(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+            print(f"saving {len(subgoals)} subgoal plots")
+            for i, subgoal in enumerate(subgoals):
+                plt.imshow(np.squeeze(subgoal))
+                plt.savefig(f"subgoal_plots/subgoal_{global_step}_{i}.png")
 
 
 
