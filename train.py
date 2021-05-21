@@ -166,6 +166,10 @@ def main():
     print('End to initalize...')
 
     accumulated_worker_episode_reward = np.zeros((num_worker,))
+    accumulated_worker_episode_obs = [[] for _ in range(num_worker)]
+    episode_traj_buffer = []
+    it_s_plotting_time = False
+
     episode_rewards = [[] for _ in range(num_worker)]
     step_rewards = [[] for _ in range(num_worker)]
     global_ep = 0
@@ -205,6 +209,12 @@ def main():
                 if real_dones[i]:
                     episode_rewards[i].append(accumulated_worker_episode_reward[i])
                     accumulated_worker_episode_reward[i] = 0
+
+            for i in range(len(next_obs)):
+                accumulated_worker_episode_obs[i].append(next_obs[i])
+                if real_dones[i]:
+                    episode_traj_buffer.append(accumulated_worker_episode_obs[i])
+                    accumulated_worker_episode_obs[i] = []
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
@@ -263,8 +273,7 @@ def main():
         total_reward = np.stack(total_reward).transpose().clip(-1, 1)
         total_action = np.stack(total_action).transpose().reshape([-1])
         total_done = np.stack(total_done).transpose()
-        total_next_obs_unflattened = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4])
-        total_next_obs = total_next_obs_unflattened.reshape([-1, 1, 84, 84])
+        total_next_obs = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4]).reshape([-1, 1, 84, 84])
         total_ext_values = np.stack(total_ext_values).transpose()
         total_int_values = np.stack(total_int_values).transpose()
         total_logging_policy = np.vstack(total_policy_np)
@@ -325,16 +334,23 @@ def main():
             torch.save(agent.rnd.target.state_dict(), target_path)
 
         #############################
-        for agent_num in range(len(total_next_obs_unflattened)):
-            obs_traj = ((total_next_obs_unflattened[agent_num] - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+        if global_update % 10 == 0:
+            it_s_plotting_time = True
+
+        for traj_num, traj in enumerate(episode_traj_buffer):
+            obs_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
             drn_model.train(obs_traj)
 
-            if global_update % 10 == 0:
+            if it_s_plotting_time:
                 subgoals = drn_model.get_subgoals(obs_traj)
                 print(f"saving {len(subgoals)} subgoal plots")
                 for i, subgoal in enumerate(subgoals):
                     plt.imshow(np.squeeze(subgoal))
-                    plt.savefig(f"subgoal_plots/subgoal_{global_step}_{agent_num}_{i}.png")
+                    plt.savefig(f"subgoal_plots/subgoal_{global_step}_{traj_num}_{i}.png")
+
+        if it_s_plotting_time and episode_traj_buffer:
+            it_s_plotting_time = False
+        episode_traj_buffer = []
 
 
 
