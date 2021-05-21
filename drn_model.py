@@ -115,13 +115,13 @@ class DeepRelNov:
 
     def get_rel_nov_states(self, trajectory):
         trajectory_tensor = torch.FloatTensor(trajectory).to(self.device)
-        novelty_vals = [self.novelty_rnd.forward(torch.unsqueeze(s, 0)) for s in trajectory_tensor]
+        novelty_vals = self.novelty_rnd.forward(trajectory_tensor)
 
         def get_rel_novelty(i):
             visits_before = novelty_vals[i - self.n_l : i]
             visits_after = novelty_vals[i : i + self.n_l]
 
-            return np.sqrt(np.sum(visits_before) / np.sum(visits_after))
+            return np.sum(visits_after) / np.sum(visits_before)
 
         rel_nov_states = []
         for i in range(self.n_l, len(trajectory) - self.n_l):

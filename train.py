@@ -254,7 +254,6 @@ def main():
             pickle_dump(path, episode_rewards)
             episode_rewards = [[] for _ in range(num_worker)]
 
-        # calculate last next value
         _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
         total_ext_values.append(value_ext)
         total_int_values.append(value_int)
@@ -264,7 +263,8 @@ def main():
         total_reward = np.stack(total_reward).transpose().clip(-1, 1)
         total_action = np.stack(total_action).transpose().reshape([-1])
         total_done = np.stack(total_done).transpose()
-        total_next_obs = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4]).reshape([-1, 1, 84, 84])
+        total_next_obs_unflattened = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4])
+        total_next_obs = total_next_obs_unflattened.reshape([-1, 1, 84, 84])
         total_ext_values = np.stack(total_ext_values).transpose()
         total_int_values = np.stack(total_int_values).transpose()
         total_logging_policy = np.vstack(total_policy_np)
@@ -325,14 +325,16 @@ def main():
             torch.save(agent.rnd.target.state_dict(), target_path)
 
         #############################
-        drn_model.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+        for agent_num in range(len(total_next_obs_unflattened)):
+            obs_traj = ((total_next_obs_unflattened[agent_num] - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+            drn_model.train(obs_traj)
 
-        if global_step % 1 == 0:
-            subgoals = drn_model.get_subgoals(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
-            print(f"saving {len(subgoals)} subgoal plots")
-            for i, subgoal in enumerate(subgoals):
-                plt.imshow(np.squeeze(subgoal))
-                plt.savefig(f"subgoal_plots/subgoal_{global_step}_{i}.png")
+            if global_update % 10 == 0:
+                subgoals = drn_model.get_subgoals(obs_traj)
+                print(f"saving {len(subgoals)} subgoal plots")
+                for i, subgoal in enumerate(subgoals):
+                    plt.imshow(np.squeeze(subgoal))
+                    plt.savefig(f"subgoal_plots/subgoal_{global_step}_{agent_num}_{i}.png")
 
 
 
