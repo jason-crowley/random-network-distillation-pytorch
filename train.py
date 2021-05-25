@@ -19,22 +19,20 @@ def pickle_dump(path, buffer):
         try:
             with gzip.open(path, "ab") as f:
                 pickle.dump(buffer, f)  # type: ignore
-            step_rewards = []
             print("Done")
             break
         except:
             print("Failed")
-            time.sleep(2) 
+            time.sleep(2)
 
 def main():
     print({section: dict(config[section]) for section in config.sections()})
     train_method = default_config['TrainMethod']
+    assert train_method == 'RND'
     env_id = default_config['EnvID']
     env_type = default_config['EnvType']
 
-    if env_type == 'mario':
-        env = BinarySpaceToDiscreteSpaceEnv(gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
-    elif env_type == 'atari':
+    if env_type == 'atari':
         env = gym.make(env_id)
     else:
         raise NotImplementedError
@@ -88,8 +86,6 @@ def main():
 
     if default_config['EnvType'] == 'atari':
         env_type = AtariEnvironment
-    elif default_config['EnvType'] == 'mario':
-        env_type = MarioEnvironment
     else:
         raise NotImplementedError
 
@@ -149,7 +145,7 @@ def main():
     # normalize obs
     print('Start to initailize observation normalization parameter.....')
     next_obs = []
-    for step in range(num_step * pre_obs_norm_step):
+    for _ in range(num_step * pre_obs_norm_step):
         actions = np.random.randint(0, output_size, size=(num_worker,))
 
         for parent_conn, action in zip(parent_conns, actions):
@@ -175,8 +171,8 @@ def main():
     global_ep = 0
 
     while True:
-        total_state, total_reward, total_done, total_next_state, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
-            [], [], [], [], [], [], [], [], [], [], []
+        total_state, total_reward, total_done, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
+            [], [], [], [], [], [], [], [], [], []
         global_step += (num_worker * num_step)
         global_update += 1
 
@@ -248,12 +244,12 @@ def main():
                 sample_i_rall = 0
 
             writer.add_scalar('data/avg_reward_per_step', np.mean(rewards), global_step + num_worker * (cur_step - num_step))
-            
+
         while all(episode_rewards):
             global_ep += 1
             avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
             writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
-        
+
         if len(step_rewards[0]) > 100:
             path = f"logs/{env_id}_steprewards.pkl.gz"
             pickle_dump(path, step_rewards)
