@@ -29,7 +29,7 @@ def global_grad_norm_(parameters, norm_type=2):
     parameters = list(filter(lambda p: p.grad is not None, parameters))
     norm_type = float(norm_type)
     if norm_type == float("inf"):
-        total_norm = max(p.grad.data.abs().max() for p in parameters)
+        total_norm = max(p.grad.data.abs().max().item() for p in parameters)
     else:
         total_norm = 0
         for p in parameters:
@@ -61,7 +61,7 @@ class RNDAgent:
         self.rnd = self.rnd.to(self.device)
 
     def forward(self, obs):
-        obs = torch.FloatTensor(obs).to(self.device)
+        obs = torch.as_tensor(obs, dtype=torch.float)
 
         predict_next_feature, target_next_feature = self.rnd(obs)
         output = (target_next_feature - predict_next_feature).pow(2).sum(1) / 2
@@ -69,7 +69,7 @@ class RNDAgent:
         return output.data.cpu().numpy()
 
     def train(self, obs):
-        obs = torch.FloatTensor(obs).to(self.device)
+        obs = torch.tensor(obs, dtype=torch.float)
 
         sample_range = np.arange(len(obs))
         forward_mse = nn.MSELoss(reduction='none')
@@ -77,7 +77,7 @@ class RNDAgent:
         for _ in range(self.epoch):
             np.random.shuffle(sample_range)
             for j in range(len(obs) // self.batch_size):
-                sample_idx = sample_range[self.batch_size * j:self.batch_size * (j + 1)]
+                sample_idx = sample_range[self.batch_size * j : self.batch_size * (j + 1)]
 
                 # --------------------------------------------------------------------------------
                 # for Curiosity-driven(Random Network Distillation)
@@ -85,9 +85,8 @@ class RNDAgent:
 
                 forward_loss = forward_mse(predict_next_state_feature, target_next_state_feature.detach()).mean(-1)
                 # Proportion of exp used for predictor update
-                mask = torch.rand(len(forward_loss)).to(self.device)
-                mask = (mask < self.update_proportion).type(torch.FloatTensor).to(self.device)
-                loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+                mask = torch.rand(len(forward_loss)) < self.update_proportion
+                loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.tensor([1]))
                 # ---------------------------------------------------------------------------------
 
                 self.optimizer.zero_grad()
@@ -97,21 +96,29 @@ class RNDAgent:
 
 
 class DeepRelNov:
-    def __init__(self, nov_rnd, input_size, output_size, use_cuda=False, rel_nov_percentile=90, freq_percentile=90):
+    def __init__(
+        self,
+        nov_rnd,
+        input_size,
+        output_size,
+        use_cuda=False,
+        rel_nov_percentile=95,
+        freq_percentile=50,
+    ):
         self.input_size = input_size
         self.output_size = output_size
         self.device = torch.device('cuda' if use_cuda else 'cpu')
 
         self.n_l = 7
-        self.thresh_adjustment_rate = 0.1
+        self.thresh_lr = 0.1
 
         self.rel_nov_percentile = rel_nov_percentile
-        self.rel_nov_thresh = 0
-        self.nov_rnd = RNDAgent(nov_rnd, use_cuda=True)
+        self.rel_nov_thresh = 100
+        self.nov_rnd = RNDAgent(nov_rnd, use_cuda=use_cuda)
 
         self.freq_percentile = freq_percentile
         self.freq_thresh = 0
-        self.freq_rnd = RNDAgent(RNDModel(input_size, output_size), use_cuda=True)
+        self.freq_rnd = RNDAgent(RNDModel(input_size, output_size), use_cuda=use_cuda)
 
         self.rel_nov_state_buf = deque(maxlen=100)
 
@@ -122,24 +129,24 @@ class DeepRelNov:
         rel_nov_states = self.get_rel_nov_states(rel_nov_vals, trajectory)
         self.rel_nov_state_buf.extend(rel_nov_states)
 
+        # TODO: should we train even if there are no rel_nov_states?
         self.freq_rnd.train(self.rel_nov_state_buf)
 
-        freq_vals = self.get_freq_vals(rel_nov_states)
-        self.update_freq_thresh(freq_vals)
+        if len(rel_nov_states) > 0:
+            freq_vals = self.freq_rnd.forward(rel_nov_states)
+            self.update_freq_thresh(freq_vals)
 
     def update_rel_nov_thresh(self, rel_nov_vals):
         p = np.percentile(rel_nov_vals, self.rel_nov_percentile)
-        self.rel_nov_thresh = self.thresh_adjustment_rate * p + (1 - self.thresh_adjustment_rate) * self.rel_nov_thresh
+        self.rel_nov_thresh = self.thresh_lr * p + (1 - self.thresh_lr) * self.rel_nov_thresh
 
     def update_freq_thresh(self, freq_vals):
-        if len(freq_vals) > 0:
-            p = np.percentile(freq_vals, self.freq_percentile)
-            self.freq_thresh = self.thresh_adjustment_rate * p + (1 - self.thresh_adjustment_rate) * self.freq_thresh
+        p = np.percentile(freq_vals, self.freq_percentile)
+        self.freq_thresh = self.thresh_lr * p + (1 - self.thresh_lr) * self.freq_thresh
 
     def get_rel_nov_vals(self, trajectory):
-        # Gets the relative novelty values for the states in the trajectory
-        trajectory_tensor = torch.FloatTensor(trajectory).to(self.device)
-        nov_vals = self.nov_rnd.forward(trajectory_tensor)
+        "Gets the relative novelty values for the states in the trajectory"
+        nov_vals = self.nov_rnd.forward(trajectory)
 
         def get_rel_nov(i):
             if i < self.n_l or i >= len(trajectory) - self.n_l:
@@ -153,28 +160,11 @@ class DeepRelNov:
         return [get_rel_nov(i) for i in range(len(trajectory))]
 
     def get_rel_nov_states(self, rel_nov_vals, trajectory):
-        # Gets states in the trajectory whose relative novelty is greater than
-        # the novelty threshold
+        "Gets states in the trajectory whose relative novelty is greater than the novelty threshold"
         return trajectory[rel_nov_vals > self.rel_nov_thresh]
 
-        # rel_nov_states = []
-        # for i in range(self.n_l, len(trajectory) - self.n_l):
-        #     rel_nov = rel_nov_vals[i]
-        #     obs = trajectory[i]
-        #     if rel_nov > self.novelty_threshold:
-        #         rel_nov_states.append(obs)
-        # return rel_nov_states
-
-    def get_freq_vals(self, rel_nov_states):
-        states_tensor = torch.FloatTensor(rel_nov_states).to(self.device)
-        return self.freq_rnd.forward(states_tensor)
-
     def get_subgoals(self, trajectory):
-        subgoals = []
         rel_nov_vals = self.get_rel_nov_vals(trajectory)
         rel_nov_states = self.get_rel_nov_states(rel_nov_vals, trajectory)
-        for obs in rel_nov_states:
-            freq = self.freq_rnd.forward(torch.FloatTensor([obs]).to(self.device))
-            if freq < self.freq_thresh:
-                subgoals.append(obs)
-        return subgoals
+        freq_vals = self.freq_rnd.forward(rel_nov_states)
+        return rel_nov_states[freq_vals < self.freq_thresh]

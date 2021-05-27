@@ -44,8 +44,8 @@ def make_train_data(reward, done, value, gamma, num_step, num_worker):
 class RunningMeanStd(object):
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
     def __init__(self, epsilon=1e-4, shape=()):
-        self.mean = np.zeros(shape, 'float64')
-        self.var = np.ones(shape, 'float64')
+        self.mean = np.zeros(shape, 'float32')
+        self.var = np.ones(shape, 'float32')
         self.count = epsilon
 
     def update(self, x):
@@ -115,7 +115,7 @@ def global_grad_norm_(parameters, norm_type=2):
     parameters = list(filter(lambda p: p.grad is not None, parameters))
     norm_type = float(norm_type)
     if norm_type == inf:
-        total_norm = max(p.grad.data.abs().max() for p in parameters)
+        total_norm = max(p.grad.data.abs().max().item() for p in parameters)
     else:
         total_norm = 0
         for p in parameters:

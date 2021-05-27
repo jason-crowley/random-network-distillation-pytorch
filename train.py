@@ -1,29 +1,17 @@
-from agents import *
-from envs import *
-from utils import *
-from config import *
-from drn_model import DeepRelNov
+from datetime import datetime
+from pathlib import Path
 
-from torch.multiprocessing import Pipe
-from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 import numpy as np
-import gzip
-import time
-import pickle
+from tensorboardX import SummaryWriter
+from torch.multiprocessing import Pipe
 
+from agents import *
+from config import *
+from drn_model import DeepRelNov
+from envs import *
+from utils import *
 
-def pickle_dump(path, buffer):
-    while True:
-        print(f"[+] Dumping buffer to '{path}'... ", end="")
-        try:
-            with gzip.open(path, "ab") as f:
-                pickle.dump(buffer, f)  # type: ignore
-            print("Done")
-            break
-        except:
-            print("Failed")
-            time.sleep(2)
 
 def main():
     print({section: dict(config[section]) for section in config.sections()})
@@ -50,11 +38,20 @@ def main():
     predictor_path = 'models/{}.pred'.format(env_id)
     target_path = 'models/{}.target'.format(env_id)
 
-    writer = SummaryWriter(logdir=f"runs/{env_id}")
+    run_path = Path(f'runs/{env_id}_{datetime.now().strftime("%b%d_%H-%M-%S")}')
+    log_path = run_path / 'logs'
+    subgoals_path = run_path / 'subgoal_plots'
+
+    run_path.mkdir(parents=True)
+    log_path.mkdir()
+    subgoals_path.mkdir()
+
+    writer = SummaryWriter(log_path)
 
     use_cuda = default_config.getboolean('UseGPU')
     use_gae = default_config.getboolean('UseGAE')
     use_noisy_net = default_config.getboolean('UseNoisyNet')
+    torch.set_default_tensor_type('torch.cuda.FloatTensor' if use_cuda else 'torch.FloatTensor')
 
     lam = float(default_config['Lambda'])
     num_worker = int(default_config['NumEnv'])
@@ -106,7 +103,7 @@ def main():
         use_gae=use_gae,
         use_noisy_net=use_noisy_net
     )
-    drn_model = DeepRelNov(agent.rnd, input_size, output_size)
+    drn_model = DeepRelNov(agent.rnd, input_size, output_size, use_cuda=use_cuda)
 
     if is_load_model:
         print('load model...')
@@ -250,16 +247,6 @@ def main():
             avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
             writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
 
-        if len(step_rewards[0]) > 100:
-            path = f"logs/{env_id}_steprewards.pkl.gz"
-            pickle_dump(path, step_rewards)
-            step_rewards = [[] for _ in range(num_worker)]
-
-        if len(episode_rewards[0]) > 5:
-            path = f"logs/{env_id}_episoderewards.pkl.gz"
-            pickle_dump(path, episode_rewards)
-            episode_rewards = [[] for _ in range(num_worker)]
-
         _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
         total_ext_values.append(value_ext)
         total_int_values.append(value_int)
@@ -330,7 +317,7 @@ def main():
             torch.save(agent.rnd.target.state_dict(), target_path)
 
         #############################
-        if global_update % 10 == 0:
+        if global_update % 100 == 0:
             it_s_plotting_time = True
 
         for traj_num, traj in enumerate(episode_traj_buffer):
@@ -342,13 +329,11 @@ def main():
                 print(f"saving {len(subgoals)} subgoal plots")
                 for i, subgoal in enumerate(subgoals):
                     plt.imshow(np.squeeze(subgoal))
-                    plt.savefig(f"subgoal_plots/subgoal_{global_step}_{traj_num}_{i}.png")
+                    plt.savefig(f"{subgoals_path}/subgoal_{global_step}_{traj_num}_{i}.png")
 
         if it_s_plotting_time and episode_traj_buffer:
             it_s_plotting_time = False
         episode_traj_buffer = []
-
-
 
 if __name__ == '__main__':
     main()

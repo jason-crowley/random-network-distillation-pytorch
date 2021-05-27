@@ -139,7 +139,7 @@ class AtariEnvironment(Environment):
         self.p = p
 
         self.history_size = history_size
-        self.history = np.zeros([history_size, h, w])
+        self.history = np.zeros([history_size, h, w], dtype='float32')
         self.h = h
         self.w = w
 

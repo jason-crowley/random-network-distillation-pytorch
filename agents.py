@@ -54,8 +54,7 @@ class RNDAgent(object):
         self.model = self.model.to(self.device)
 
     def get_action(self, state):
-        state = torch.Tensor(state).to(self.device)
-        state = state.float()
+        state = torch.tensor(state, dtype=torch.float)
         policy, value_ext, value_int = self.model(state)
         action_prob = F.softmax(policy, dim=-1).data.cpu().numpy()
 
@@ -69,7 +68,7 @@ class RNDAgent(object):
         return (p.cumsum(axis=axis) > r).argmax(axis=axis)
 
     def compute_intrinsic_reward(self, next_obs):
-        next_obs = torch.FloatTensor(next_obs).to(self.device)
+        next_obs = torch.tensor(next_obs, dtype=torch.float)
 
         target_next_feature = self.rnd.target(next_obs)
         predict_next_feature = self.rnd.predictor(next_obs)
@@ -78,12 +77,12 @@ class RNDAgent(object):
         return intrinsic_reward.data.cpu().numpy()
 
     def train_model(self, s_batch, target_ext_batch, target_int_batch, y_batch, adv_batch, next_obs_batch, old_policy):
-        s_batch = torch.FloatTensor(s_batch).to(self.device)
-        target_ext_batch = torch.FloatTensor(target_ext_batch).to(self.device)
-        target_int_batch = torch.FloatTensor(target_int_batch).to(self.device)
-        y_batch = torch.LongTensor(y_batch).to(self.device)
-        adv_batch = torch.FloatTensor(adv_batch).to(self.device)
-        next_obs_batch = torch.FloatTensor(next_obs_batch).to(self.device)
+        s_batch = torch.tensor(s_batch, dtype=torch.float)
+        target_ext_batch = torch.tensor(target_ext_batch, dtype=torch.float)
+        target_int_batch = torch.tensor(target_int_batch, dtype=torch.float)
+        y_batch = torch.tensor(y_batch, dtype=torch.long)
+        adv_batch = torch.tensor(adv_batch, dtype=torch.float)
+        next_obs_batch = torch.tensor(next_obs_batch, dtype=torch.float)
 
         sample_range = np.arange(len(s_batch))
         forward_mse = nn.MSELoss(reduction='none')
@@ -96,7 +95,7 @@ class RNDAgent(object):
             log_prob_old = m_old.log_prob(y_batch)
             # ------------------------------------------------------------
 
-        for i in range(self.epoch):
+        for _ in range(self.epoch):
             np.random.shuffle(sample_range)
             for j in range(int(len(s_batch) / self.batch_size)):
                 sample_idx = sample_range[self.batch_size * j:self.batch_size * (j + 1)]
@@ -107,9 +106,8 @@ class RNDAgent(object):
 
                 forward_loss = forward_mse(predict_next_state_feature, target_next_state_feature.detach()).mean(-1)
                 # Proportion of exp used for predictor update
-                mask = torch.rand(len(forward_loss)).to(self.device)
-                mask = (mask < self.update_proportion).type(torch.FloatTensor).to(self.device)
-                forward_loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+                mask = torch.rand(len(forward_loss)) < self.update_proportion
+                forward_loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.tensor([1]))
                 # ---------------------------------------------------------------------------------
 
                 policy, value_ext, value_int = self.model(s_batch[sample_idx])
