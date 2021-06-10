@@ -91,6 +91,11 @@ class MontezumaInfoWrapper(gym.Wrapper):
         assert len(ram) == 128
         return int(ram[self.room_address])
 
+    def get_player_pos(self):
+        ram = unwrap(self.env).ale.getRAM()
+        assert len(ram) == 128
+        return (int(ram[42]), int(ram[43]))
+
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
         self.visited_rooms.add(self.get_current_room())
@@ -98,6 +103,8 @@ class MontezumaInfoWrapper(gym.Wrapper):
         if 'episode' not in info:
             info['episode'] = {}
         info['episode'].update(visited_rooms=copy(self.visited_rooms))
+        info['current_room'] = self.get_current_room()
+        info['player_pos'] = self.get_player_pos()
 
         if done:
             self.visited_rooms.clear()
@@ -182,7 +189,7 @@ class AtariEnvironment(Environment):
                 self.history = self.reset()
 
             self.child_conn.send(
-                [self.history[:, :, :], reward, force_done, done, log_reward])
+                [self.history[:, :, :], reward, force_done, done, log_reward, info])
 
     def reset(self):
         self.last_action = 0

@@ -159,9 +159,6 @@ def main():
     print('End to initalize...')
 
     accumulated_worker_episode_reward = np.zeros((num_worker,))
-    accumulated_worker_episode_obs = [[] for _ in range(num_worker)]
-    episode_traj_buffer = []
-    it_s_plotting_time = False
 
     episode_rewards = [[] for _ in range(num_worker)]
     step_rewards = [[] for _ in range(num_worker)]
@@ -202,12 +199,6 @@ def main():
                 if real_dones[i]:
                     episode_rewards[i].append(accumulated_worker_episode_reward[i])
                     accumulated_worker_episode_reward[i] = 0
-
-            for i in range(len(next_obs)):
-                accumulated_worker_episode_obs[i].append(next_obs[i])
-                if real_dones[i]:
-                    episode_traj_buffer.append(accumulated_worker_episode_obs[i])
-                    accumulated_worker_episode_obs[i] = []
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
@@ -316,24 +307,6 @@ def main():
             torch.save(agent.rnd.predictor.state_dict(), predictor_path)
             torch.save(agent.rnd.target.state_dict(), target_path)
 
-        #############################
-        if global_update % 100 == 0:
-            it_s_plotting_time = True
-
-        for traj_num, traj in enumerate(episode_traj_buffer):
-            obs_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-            drn_model.train(obs_traj)
-
-            if it_s_plotting_time:
-                subgoals = drn_model.get_subgoals(obs_traj)
-                print(f"saving {len(subgoals)} subgoal plots")
-                for i, subgoal in enumerate(subgoals):
-                    plt.imshow(np.squeeze(subgoal))
-                    plt.savefig(f"{subgoals_path}/subgoal_{global_step}_{traj_num}_{i}.png")
-
-        if it_s_plotting_time and episode_traj_buffer:
-            it_s_plotting_time = False
-        episode_traj_buffer = []
 
 if __name__ == '__main__':
     main()

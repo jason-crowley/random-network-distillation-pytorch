@@ -113,7 +113,7 @@ class DeepRelNov:
         self.thresh_lr = 0.1
 
         self.rel_nov_percentile = rel_nov_percentile
-        self.rel_nov_thresh = 100
+        self.rel_nov_thresh = 10#100
         self.nov_rnd = RNDAgent(nov_rnd, use_cuda=use_cuda)
 
         self.freq_percentile = freq_percentile
@@ -123,10 +123,11 @@ class DeepRelNov:
         self.rel_nov_state_buf = deque(maxlen=100)
 
     def train(self, trajectory):
-        rel_nov_vals = self.get_rel_nov_vals(trajectory)
+        nov_vals = self.get_nov_vals(trajectory)
+        rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
         self.update_rel_nov_thresh(rel_nov_vals)
 
-        rel_nov_states = self.get_rel_nov_states(rel_nov_vals, trajectory)
+        rel_nov_states, _ = self.get_rel_nov_states(rel_nov_vals, trajectory)
         self.rel_nov_state_buf.extend(rel_nov_states)
 
         # TODO: should we train even if there are no rel_nov_states?
@@ -144,9 +145,11 @@ class DeepRelNov:
         p = np.percentile(freq_vals, self.freq_percentile)
         self.freq_thresh = self.thresh_lr * p + (1 - self.thresh_lr) * self.freq_thresh
 
-    def get_rel_nov_vals(self, trajectory):
+    def get_nov_vals(self, trajectory):
+        return self.nov_rnd.forward(trajectory)
+
+    def get_rel_nov_vals(self, trajectory, nov_vals):
         "Gets the relative novelty values for the states in the trajectory"
-        nov_vals = self.nov_rnd.forward(trajectory)
 
         def get_rel_nov(i):
             if i < self.n_l or i >= len(trajectory) - self.n_l:
@@ -157,14 +160,35 @@ class DeepRelNov:
 
             return np.sum(visits_after) / np.sum(visits_before)
 
-        return [get_rel_nov(i) for i in range(len(trajectory))]
+        return np.array([get_rel_nov(i) for i in range(len(trajectory))])
 
     def get_rel_nov_states(self, rel_nov_vals, trajectory):
         "Gets states in the trajectory whose relative novelty is greater than the novelty threshold"
-        return trajectory[rel_nov_vals > self.rel_nov_thresh]
+        I = np.arange(len(trajectory))[rel_nov_vals > self.rel_nov_thresh]
+        return trajectory[I], I
 
-    def get_subgoals(self, trajectory):
-        rel_nov_vals = self.get_rel_nov_vals(trajectory)
-        rel_nov_states = self.get_rel_nov_states(rel_nov_vals, trajectory)
+    def max_so_far(nov_vals):
+        M = np.maximum.accumulate(nov_vals)
+        V = M[1:] > M[:-1]
+        I = [x + 1 for x in np.where(V[1:] < V[:-1])[0]]
+        return I[1:]
+
+    def get_max_subgoals(self, trajectory):
+        return
+
+    def get_rel_nov_subgoals(self, trajectory):
+        nov_vals = self.get_nov_vals(trajectory)
+        rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
+        #I_nov is indexes of rel_nov states in original trajectory
+        rel_nov_states, I = self.get_rel_nov_states(rel_nov_vals, trajectory)
+        if len(rel_nov_states) == 0:
+            return [], [], [], [], []
+
         freq_vals = self.freq_rnd.forward(rel_nov_states)
-        return rel_nov_states[freq_vals < self.freq_thresh]
+        #I is relative to list of relatively novel states not global traj
+        I_freq = np.arange(len(freq_vals))[freq_vals < self.freq_thresh]
+        if len(I) == 0:
+            return [], [], [], [], []
+
+        I = I[I_freq]
+        return rel_nov_states[I_freq], nov_vals[I], rel_nov_vals[I], freq_vals[I_freq], I
