@@ -19,6 +19,7 @@ def plot_file(path, name):
     plt.scatter(X, smoothed[X], marker='x', c='red', label='calculated rel nov', zorder=10)
 
     plt.plot(data['rel_nov_vals'], c='orange', label='relative novelty')
+    # plt.plot(get_rel_nov_vals(data['nov_vals']), c='red', label='relative novelty')
     plt.plot(data['current_room'], c='green', label='current room')
     plt.legend()
     plt.title(name)
@@ -30,8 +31,21 @@ def max_so_far(nov_vals):
     I = [x + 1 for x in np.where(V[1:] < V[:-1])[0]]
     return I[1:]
 
+def get_rel_nov_vals(nov_vals, n_l=7):
+    def get_rel_nov(i):
+        if i < n_l or i >= len(nov_vals) - n_l:
+            return 0
+
+        visits_before = nov_vals[i - n_l : i]
+        visits_after = nov_vals[i : i + n_l]
+
+        # return np.sum(visits_before) / np.sum(visits_after)
+        return max(np.sum(visits_after) - np.sum(visits_before), 0)
+
+    return np.array([get_rel_nov(i) for i in range(len(nov_vals))])
+
 def plot_all():
-    TRAJECTORY_LOAD_PATH = "runs/MontezumaRevengeNoFrameskip-v4_Jun08_15-19-38/json_data"
+    TRAJECTORY_LOAD_PATH = "runs/MontezumaRevengeNoFrameskip-v4_Jun11_10-48-59/json_data"
     files = os.listdir(TRAJECTORY_LOAD_PATH)
     files.sort()
     for filename in files:

@@ -332,7 +332,7 @@ def main():
         for traj_num, episode_dict in enumerate(episode_traj_buffer):
             traj = np.array(episode_dict["images"])
             obs_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-            drn_model.train(obs_traj)
+            drn_model.train_max(obs_traj)
             episode_counter += 1
 
             if episode_counter % 100 == 0:
@@ -353,7 +353,8 @@ def main():
                 print(f"saving {len(subgoals)} subgoal plots")
                 for i, subgoal in enumerate(subgoals):
                     plt.rcParams["axes.titlesize"] = 8
-                    plt.title(f"RND1: {nov_vals[i]:.2f} rel_nov: {rel_nov_vals[i]:.2f} RND2: {freq_vals[i]:.2f} \n visited rooms: {visited_rooms_traj[i]} current room: {current_rooms_traj[i]}")
+                    rel_nov_displ = None if rel_nov_vals == None else f'{rel_nov_vals[i]:.2f}'
+                    plt.title(f"RND1: {nov_vals[i]:.2f} rel_nov: {rel_nov_displ} RND2: {freq_vals[i]:.2f} \n visited rooms: {visited_rooms_traj[i]} current room: {current_rooms_traj[i]}")
                     plt.imshow(np.squeeze(subgoal))
                     plt.tight_layout()
                     plt.savefig(f"{subgoals_path}/subgoal_{episode_counter}_{traj_num}_{i}.png")

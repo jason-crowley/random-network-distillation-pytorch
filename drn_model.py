@@ -122,7 +122,7 @@ class DeepRelNov:
 
         self.rel_nov_state_buf = deque(maxlen=100)
 
-    def train(self, trajectory):
+    def train_rel_nov(self, trajectory):
         nov_vals = self.get_nov_vals(trajectory)
         rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
         self.update_rel_nov_thresh(rel_nov_vals)
@@ -135,6 +135,20 @@ class DeepRelNov:
 
         if len(rel_nov_states) > 0:
             freq_vals = self.freq_rnd.forward(rel_nov_states)
+            self.update_freq_thresh(freq_vals)
+
+    def train_max(self, trajectory):
+        nov_vals = self.get_nov_vals(trajectory)
+        I = self.max_so_far(nov_vals)
+        nov_states = trajectory[I]
+
+        self.rel_nov_state_buf.extend(nov_states)
+
+        # TODO: should we train even if there are no rel_nov_states?
+        self.freq_rnd.train(self.rel_nov_state_buf)
+
+        if len(nov_states) > 0:
+            freq_vals = self.freq_rnd.forward(nov_states)
             self.update_freq_thresh(freq_vals)
 
     def update_rel_nov_thresh(self, rel_nov_vals):
@@ -167,14 +181,27 @@ class DeepRelNov:
         I = np.arange(len(trajectory))[rel_nov_vals > self.rel_nov_thresh]
         return trajectory[I], I
 
-    def max_so_far(nov_vals):
+    def max_so_far(self, nov_vals):
         M = np.maximum.accumulate(nov_vals)
         V = M[1:] > M[:-1]
         I = [x + 1 for x in np.where(V[1:] < V[:-1])[0]]
         return I[1:]
 
+    def get_subgoals(self, trajectory):
+        return self.get_max_subgoals(trajectory)
+
     def get_max_subgoals(self, trajectory):
-        return
+        nov_vals = self.get_nov_vals(trajectory)
+        I = np.array(self.max_so_far(nov_vals))
+        nov_states = trajectory[I]
+
+        freq_vals = self.freq_rnd.forward(nov_states)
+        I_freq = np.arange(len(freq_vals))[freq_vals < self.freq_thresh]
+        if len(I) == 0 or len(I_freq) == 0:
+            return [], [], [], [], []
+
+        I = I[np.array(I_freq)]
+        return nov_states[I_freq], nov_vals[I], None, freq_vals[I_freq], I
 
     def get_rel_nov_subgoals(self, trajectory):
         nov_vals = self.get_nov_vals(trajectory)
