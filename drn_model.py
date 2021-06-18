@@ -172,7 +172,8 @@ class DeepRelNov:
             visits_before = nov_vals[i - self.n_l : i]
             visits_after = nov_vals[i : i + self.n_l]
 
-            return np.sum(visits_after) / np.sum(visits_before)
+            # return np.sum(visits_after) / np.sum(visits_before)
+            return max(np.sum(visits_after) - np.sum(visits_before),0)
 
         return np.array([get_rel_nov(i) for i in range(len(trajectory))])
 
@@ -188,7 +189,8 @@ class DeepRelNov:
         return I[1:]
 
     def get_subgoals(self, trajectory):
-        return self.get_max_subgoals(trajectory)
+        # return self.get_max_subgoals(trajectory)
+        return self.get_rel_nov_subgoals(trajectory)
 
     def get_max_subgoals(self, trajectory):
         nov_vals = self.get_nov_vals(trajectory)

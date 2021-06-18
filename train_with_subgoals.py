@@ -332,7 +332,7 @@ def main():
         for traj_num, episode_dict in enumerate(episode_traj_buffer):
             traj = np.array(episode_dict["images"])
             obs_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-            drn_model.train_max(obs_traj)
+            drn_model.train_rel_nov(obs_traj)
             episode_counter += 1
 
             if episode_counter % 100 == 0:
