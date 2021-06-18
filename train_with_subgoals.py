@@ -353,7 +353,7 @@ def main():
                 print(f"saving {len(subgoals)} subgoal plots")
                 for i, subgoal in enumerate(subgoals):
                     plt.rcParams["axes.titlesize"] = 8
-                    rel_nov_displ = None if rel_nov_vals == None else f'{rel_nov_vals[i]:.2f}'
+                    rel_nov_displ = None if rel_nov_vals is None else f'{rel_nov_vals[i]:.2f}'
                     plt.title(f"RND1: {nov_vals[i]:.2f} rel_nov: {rel_nov_displ} RND2: {freq_vals[i]:.2f} \n visited rooms: {visited_rooms_traj[i]} current room: {current_rooms_traj[i]}")
                     plt.imshow(np.squeeze(subgoal))
                     plt.tight_layout()
