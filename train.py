@@ -149,7 +149,7 @@ def main():
             parent_conn.send(action)
 
         for parent_conn in parent_conns:
-            s, r, d, rd, lr = parent_conn.recv()
+            s, r, d, rd, lr, _ = parent_conn.recv()
             next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
 
         if len(next_obs) % (num_step * num_worker) == 0:
@@ -179,7 +179,7 @@ def main():
 
             next_states, rewards, dones, real_dones, log_rewards, next_obs = [], [], [], [], [], []
             for parent_conn in parent_conns:
-                s, r, d, rd, lr = parent_conn.recv()
+                s, r, d, rd, lr, _ = parent_conn.recv()
                 next_states.append(s)
                 rewards.append(r)
                 dones.append(d)
