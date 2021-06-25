@@ -45,7 +45,7 @@ def get_rel_nov_vals(nov_vals, n_l=7):
     return np.array([get_rel_nov(i) for i in range(len(nov_vals))])
 
 def plot_all():
-    TRAJECTORY_LOAD_PATH = "runs/MontezumaRevengeNoFrameskip-v4_Jun11_10-48-59/json_data"
+    TRAJECTORY_LOAD_PATH = "runs/MontezumaRevengeNoFrameskip-v4_Jun18_13-37-54/json_data"
     files = os.listdir(TRAJECTORY_LOAD_PATH)
     files.sort()
     for filename in files:

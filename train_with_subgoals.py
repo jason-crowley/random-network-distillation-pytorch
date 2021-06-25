@@ -338,6 +338,9 @@ def main():
             if episode_counter % 100 == 0:
                 subgoals, nov_vals, rel_nov_vals, freq_vals, I = drn_model.get_subgoals(obs_traj)
 
+                N = 1
+                top_N = np.argpartition(freq_vals, -N)[-N:]
+
                 all_nov_vals = drn_model.get_nov_vals(obs_traj)
                 all_rel_nov_vals = drn_model.get_rel_nov_vals(obs_traj, all_nov_vals)
                 data = {}
@@ -351,7 +354,7 @@ def main():
                 visited_rooms_traj = np.array(episode_dict["visited_rooms"])[I]
                 current_rooms_traj = np.array(episode_dict["current_room"])[I]
                 print(f"saving {len(subgoals)} subgoal plots")
-                for i, subgoal in enumerate(subgoals):
+                for i, subgoal in enumerate(subgoals[top_N]):
                     plt.rcParams["axes.titlesize"] = 8
                     rel_nov_displ = None if rel_nov_vals is None else f'{rel_nov_vals[i]:.2f}'
                     plt.title(f"RND1: {nov_vals[i]:.2f} rel_nov: {rel_nov_displ} RND2: {freq_vals[i]:.2f} \n visited rooms: {visited_rooms_traj[i]} current room: {current_rooms_traj[i]}")
