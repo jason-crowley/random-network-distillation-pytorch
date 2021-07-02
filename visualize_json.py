@@ -10,13 +10,13 @@ def plot_file(path, name):
     with open(path) as json_file:
         data = json.load(json_file)
     smoothed = data['nov_vals']
-    smoothed = np.convolve(smoothed, np.ones(20)/20, mode='valid')
+    #smoothed = np.convolve(smoothed, np.ones(20)/20, mode='valid')
 
     plt.plot(data['nov_vals'], c='cyan', label='novelty')
-    plt.plot(smoothed, c='blue', label='novelty')
+    #plt.plot(smoothed, c='blue', label='novelty')
 
-    X = max_so_far(smoothed)
-    plt.scatter(X, smoothed[X], marker='x', c='red', label='calculated rel nov', zorder=10)
+    # X = max_so_far(smoothed)
+    # plt.scatter(X, smoothed[X], marker='x', c='red', label='calculated rel nov', zorder=10)
 
     plt.plot(data['rel_nov_vals'], c='orange', label='relative novelty')
     # plt.plot(get_rel_nov_vals(data['nov_vals']), c='red', label='relative novelty')
@@ -45,7 +45,7 @@ def get_rel_nov_vals(nov_vals, n_l=7):
     return np.array([get_rel_nov(i) for i in range(len(nov_vals))])
 
 def plot_all():
-    TRAJECTORY_LOAD_PATH = "runs/MontezumaRevengeNoFrameskip-v4_Jun18_13-37-54/json_data"
+    TRAJECTORY_LOAD_PATH = "runs/MontezumaRevengeNoFrameskip-v4_Jun26_14-12-29/json_data"
     files = os.listdir(TRAJECTORY_LOAD_PATH)
     files.sort()
     for filename in files:

@@ -192,6 +192,12 @@ class DeepRelNov:
         # return self.get_max_subgoals(trajectory)
         return self.get_rel_nov_subgoals(trajectory)
 
+    def get_filtered_subgoals(self, trajectory, N):
+        subgoals, _, _, freq_vals, _ = self.get_subgoals(trajectory)
+        N = 1
+        top_N = np.argpartition(freq_vals, -N)[-N:]
+        return subgoals[top_N]
+
     def get_max_subgoals(self, trajectory):
         nov_vals = self.get_nov_vals(trajectory)
         I = np.array(self.max_so_far(nov_vals))
