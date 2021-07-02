@@ -237,6 +237,7 @@ def main():
             global_ep += 1
             avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
             writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
+            writer.add_scalar('data/avg_reward_per_episode_at_step', avg_ep_reward, global_step)
 
         _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
         total_ext_values.append(value_ext)
