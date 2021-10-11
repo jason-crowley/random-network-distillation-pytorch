@@ -162,17 +162,37 @@ class DeepRelNov:
     def get_nov_vals(self, trajectory):
         return self.nov_rnd.forward(trajectory)
 
-    def get_rel_nov_vals(self, trajectory, nov_vals):
+    def get_rel_nov_vals(self, trajectory, nov_vals, method='positive', n_l=None):
+        if n_l is None:
+            n_l = self.n_l
+        if 'positive' in method:
+            return self.get_rel_nov_vals_positive(trajectory, nov_vals, n_l)
+        else:
+            return self.get_rel_nov_vals_ratio(trajectory, nov_vals, n_l)
+
+    def get_rel_nov_vals_ratio(self, trajectory, nov_vals, n_l):
         "Gets the relative novelty values for the states in the trajectory"
 
         def get_rel_nov(i):
-            if i < self.n_l or i >= len(trajectory) - self.n_l:
+            if i < n_l or i >= len(trajectory) - n_l:
                 return 0
 
-            visits_before = nov_vals[i - self.n_l : i]
-            visits_after = nov_vals[i : i + self.n_l]
+            visits_before = nov_vals[i - n_l : i]
+            visits_after = nov_vals[i : i + n_l]
 
-            # return np.sum(visits_after) / np.sum(visits_before)
+            return np.sum(visits_after) / np.sum(visits_before)
+
+        return np.array([get_rel_nov(i) for i in range(len(trajectory))])
+
+    def get_rel_nov_vals_positive(self, trajectory, nov_vals, n_l):
+        "Gets the relative novelty values for the states in the trajectory"
+
+        def get_rel_nov(i):
+            if i < n_l or i >= len(trajectory) - n_l:
+                return 0
+
+            visits_before = nov_vals[i - n_l : i]
+            visits_after = nov_vals[i : i + n_l]
             return max(np.sum(visits_after) - np.sum(visits_before),0)
 
         return np.array([get_rel_nov(i) for i in range(len(trajectory))])

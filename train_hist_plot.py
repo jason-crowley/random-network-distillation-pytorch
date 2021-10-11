@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tensorboardX import SummaryWriter
 from torch.multiprocessing import Pipe
-import json
-from json import encoder
-encoder.FLOAT_REPR = lambda o: format(o, '.2f')
 
 from agents import *
 from config import *
@@ -15,6 +12,7 @@ from drn_model import DeepRelNov
 from envs import *
 from utils import *
 
+import csv
 
 def main():
     print({section: dict(config[section]) for section in config.sections()})
@@ -44,14 +42,10 @@ def main():
     run_path = Path(f'runs/{env_id}_{datetime.now().strftime("%b%d_%H-%M-%S")}')
     log_path = run_path / 'logs'
     subgoals_path = run_path / 'subgoal_plots'
-    numpy_path = run_path / 'numpy_saves'
-    data_path = run_path / 'json_data'
 
     run_path.mkdir(parents=True)
     log_path.mkdir()
     subgoals_path.mkdir()
-    numpy_path.mkdir()
-    data_path.mkdir()
 
     writer = SummaryWriter(log_path)
 
@@ -156,7 +150,7 @@ def main():
             parent_conn.send(action)
 
         for parent_conn in parent_conns:
-            s, r, d, rd, lr, i = parent_conn.recv()
+            s, r, d, rd, lr, _ = parent_conn.recv()
             next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
 
         if len(next_obs) % (num_step * num_worker) == 0:
@@ -165,22 +159,59 @@ def main():
             next_obs = []
     print('End to initalize...')
 
-    #this is for all envs
     accumulated_worker_episode_reward = np.zeros((num_worker,))
-    #this is fora single env (env = 0)
-    accumulated_worker_episode_info = {"images":[], "visited_rooms":[], "current_room": [], "player_pos": []}
-    episode_traj_buffer = []
-    episode_counter = 0
 
     episode_rewards = [[] for _ in range(num_worker)]
     step_rewards = [[] for _ in range(num_worker)]
+    trajectories = [[] for _ in range(num_worker)]
+    infos = [[] for _ in range(num_worker)]
+
+    all_traj = [] #(traj, info) pairs
+
+    methods = ['positive', 'ratio']
+    n_l_list = [3,7,11,15,19,23,27]
+
     global_ep = 0
+    #np.array([77,235]) start state
+    # np.array([78,192]), np.array([109,196]), bottomfirst ladder, rope
+    target_states = [np.array([133,192]), np.array([133,148]),
+        np.array([21,148]), np.array([21,192]), np.array([13,208]), np.array([24,235]), np.array([130,235])]
+    target_state_range = 2
+
+
+    def log_nov_data(all_traj, reward_rms, drn_model):
+        for traj, info in all_traj:
+            with torch.no_grad():
+                nov_vals = drn_model.get_nov_vals(traj)
+                nov_vals_norm = nov_vals / np.sqrt(reward_rms.var)
+
+
+            for method in methods:
+                for n_l in n_l_list:
+                    rel_nov_vals = drn_model.get_rel_nov_vals(traj, nov_vals, method=method, n_l=n_l)
+                    for j in range(len(info)):
+                        ram_state = np.array([info[j]['player_pos'][0],info[j]['player_pos'][1]])
+                        is_target = False
+                        for target_state in target_states:
+                            if np.linalg.norm(target_state - ram_state) <= target_state_range:
+                                is_target=True
+                                break
+
+                        with open(run_path / 'hist_data.csv','a+') as fd:
+                            csv_writer = csv.writer(fd, delimiter=',')
+                            csv_writer.writerow([nov_vals[j], rel_nov_vals[j], is_target, target_state, method, n_l])
+                            fd.flush()
 
     while True:
         total_state, total_reward, total_done, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
             [], [], [], [], [], [], [], [], [], []
         global_step += (num_worker * num_step)
         global_update += 1
+
+
+        if global_update > 200:
+            log_nov_data(all_traj, reward_rms, drn_model)
+            exit()
 
         # Step 1. n-step rollout
         for cur_step in range(num_step):
@@ -189,16 +220,24 @@ def main():
             for parent_conn, action in zip(parent_conns, actions):
                 parent_conn.send(action)
 
-            next_states, rewards, dones, real_dones, log_rewards, next_obs, info = [], [], [], [], [], [], []
-            for parent_conn in parent_conns:
-                s, r, d, rd, lr, i = parent_conn.recv()
+            next_states, rewards, dones, real_dones, log_rewards, next_obs = [], [], [], [], [], []
+            for i, parent_conn in enumerate(parent_conns):
+                s, r, d, rd, lr, info = parent_conn.recv()
                 next_states.append(s)
                 rewards.append(r)
                 dones.append(d)
                 real_dones.append(rd)
                 log_rewards.append(lr)
                 next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
-                info.append(i)
+                trajectories[i].append(s[-1, :, :].reshape([1, 84, 84]))
+                infos[i].append(info)
+
+                if d or rd:
+                    all_traj.append((trajectories[i].copy(), infos[i].copy()))
+                    if len(all_traj) > 50:
+                        all_traj.pop(0)
+                    trajectories[i] = []
+                    infos[i] = []
 
             next_states = np.stack(next_states)
             rewards = np.hstack(rewards)
@@ -206,21 +245,13 @@ def main():
             real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
 
+
             accumulated_worker_episode_reward += rewards
             for i in range(len(rewards)):
                 step_rewards[i].append(rewards[i])
                 if real_dones[i]:
                     episode_rewards[i].append(accumulated_worker_episode_reward[i])
                     accumulated_worker_episode_reward[i] = 0
-
-
-            accumulated_worker_episode_info["images"].append(next_obs[0])
-            accumulated_worker_episode_info["visited_rooms"].append(info[0].get('episode', {}).get('visited_rooms', {}))
-            accumulated_worker_episode_info["current_room"].append(info[0].get('current_room', {}))
-            accumulated_worker_episode_info["player_pos"].append(info[0].get('player_pos', {}))
-            if real_dones[0]:
-                episode_traj_buffer.append(accumulated_worker_episode_info)
-                accumulated_worker_episode_info = {"images":[], "visited_rooms":[], "current_room": [], "player_pos": []}
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
@@ -259,6 +290,7 @@ def main():
             global_ep += 1
             avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
             writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
+            writer.add_scalar('data/avg_reward_per_episode_at_step', avg_ep_reward, global_step)
 
         _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
         total_ext_values.append(value_ext)
@@ -328,48 +360,6 @@ def main():
             torch.save(agent.model.state_dict(), model_path)
             torch.save(agent.rnd.predictor.state_dict(), predictor_path)
             torch.save(agent.rnd.target.state_dict(), target_path)
-
-        #############################
-
-        for traj_num, episode_dict in enumerate(episode_traj_buffer):
-            traj = np.array(episode_dict["images"])
-            obs_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-            drn_model.train_rel_nov(obs_traj)
-            episode_counter += 1
-
-            if episode_counter % 100 == 0:
-                subgoals, nov_vals, rel_nov_vals, freq_vals, I = drn_model.get_subgoals(obs_traj)
-
-                last_subgoal = I[-1]
-                term_set = np.array(obs_traj[last_subgoal-5:last_subgoal+5])
-                term_set_file_name = f"{numpy_path}/term_set_{episode_counter}_{traj_num}.npy"
-                np.save(term_set_file_name, term_set)
-
-                N = 1
-                top_N = np.argpartition(freq_vals, -N)[-N:]
-
-                all_nov_vals = drn_model.get_nov_vals(obs_traj)
-                all_rel_nov_vals = drn_model.get_rel_nov_vals(obs_traj, all_nov_vals)
-                data = {}
-                data['nov_vals'] = [float(x) for x in all_nov_vals]
-                data['rel_nov_vals'] = [float(x) for x in all_rel_nov_vals]
-                data['player_pos'] = episode_dict["player_pos"]
-                data['current_room'] = episode_dict["current_room"]
-                with open(f"{data_path}/subgoal_{episode_counter}_{traj_num}_{i}.json", 'w') as f:
-                    json.dump(data, f)
-
-                visited_rooms_traj = np.array(episode_dict["visited_rooms"])[I]
-                current_rooms_traj = np.array(episode_dict["current_room"])[I]
-                print(f"saving {len(subgoals)} subgoal plots")
-                for i, subgoal in enumerate(subgoals[top_N]):
-                    plt.rcParams["axes.titlesize"] = 8
-                    rel_nov_displ = None if rel_nov_vals is None else f'{rel_nov_vals[i]:.2f}'
-                    plt.title(f"RND1: {nov_vals[i]:.2f} rel_nov: {rel_nov_displ} RND2: {freq_vals[i]:.2f} \n visited rooms: {visited_rooms_traj[i]} current room: {current_rooms_traj[i]}")
-                    plt.imshow(np.squeeze(subgoal))
-                    plt.tight_layout()
-                    plt.savefig(f"{subgoals_path}/subgoal_{episode_counter}_{traj_num}_{i}.png")
-
-        episode_traj_buffer = []
 
 
 if __name__ == '__main__':
