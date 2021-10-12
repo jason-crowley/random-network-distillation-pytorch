@@ -280,6 +280,7 @@ def main():
              i, nov, obs = drn_model.get_gaussian_nov_state(total_next_obs, obs_rms)
              plt.imshow(np.reshape(obs,(84,84)))
              plt.savefig(f"plot_{global_step}")
+             plt.cla()
 
         if global_step % (num_worker * num_step * 100) == 0:
             print('Now Global Step :{}'.format(global_step))
