@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from scipy.stats import norm
+
 from model import RNDModel
 
 
@@ -121,6 +123,30 @@ class DeepRelNov:
         self.freq_rnd = RNDAgent(RNDModel(input_size, output_size), use_cuda=use_cuda)
 
         self.rel_nov_state_buf = deque(maxlen=100)
+
+        self.state_buff = deque(maxlen=25000)
+
+    def train_gaussian(self, traj):
+        self.state_buff.extend(traj)
+        print(len(self.state_buff))
+
+    def get_gaussian_nov_state(self, traj, obs_rms):
+        norm_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+        norm_buff = ((self.state_buff - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+
+        traj_novelties = self.nov_rnd.forward(norm_traj)
+        buff_novelties = self.nov_rnd.forward(norm_buff)
+
+        mean, std = norm.fit(buff_novelties)
+
+        max_nov_index = np.argmax(traj_novelties)
+        max_nov = traj_novelties[max_nov_index]
+        if (max_nov - mean) / std > 1:
+            return max_nov_index, max_nov, traj[max_nov_index]
+        return None
+
+
+
 
     def train_rel_nov(self, trajectory):
         nov_vals = self.get_nov_vals(trajectory)
