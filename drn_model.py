@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from scipy.stats import norm
+import matplotlib.pyplot as plt
 
 from model import RNDModel
 
@@ -128,7 +129,6 @@ class DeepRelNov:
 
     def train_gaussian(self, traj):
         self.state_buff.extend(traj)
-        print(len(self.state_buff))
 
     def get_gaussian_nov_state(self, traj, obs_rms):
         norm_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
