@@ -139,11 +139,16 @@ class DeepRelNov:
 
         mean, std = norm.fit(buff_novelties)
 
-        max_nov_index = np.argmax(traj_novelties)
-        max_nov = traj_novelties[max_nov_index]
-        if (max_nov - mean) / std > 1:
-            return max_nov_index, max_nov, traj[max_nov_index]
-        return None
+        STD = abs(traj_novelties - mean) / std
+        I = np.where(STD > 2)[0]
+        if len(I) == 0:
+            return [], [], [], []
+        return I, traj_novelties[I], traj[I], STD[I]
+        # max_nov_index = np.argmax(traj_novelties)
+        # max_nov = traj_novelties[max_nov_index]
+        # if (max_nov - mean) / std > 1:
+        #     return max_nov_index, max_nov, traj[max_nov_index]
+        # return None
 
 
 

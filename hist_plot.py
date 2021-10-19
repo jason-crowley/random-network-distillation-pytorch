@@ -3,15 +3,10 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
+import seaborn
 
-positive_diff_5 = "MontezumaRevengeNoFrameskip-v4_Sep23_20-16-57"
-# ratio = "MontezumaRevengeNoFrameskip-v4_Sep23_19-32-31"
-ratio_5 = "MontezumaRevengeNoFrameskip-v4_Sep24_05-33-58"
 
-positive_diff_2 = "MontezumaRevengeNoFrameskip-v4_Sep24_12-53-19"
-ratio_2 = "MontezumaRevengeNoFrameskip-v4_Sep24_13-00-22"
-
-data_path = "MontezumaRevengeNoFrameskip-v4_Oct03_17-42-29"
+data_path = "MontezumaRevengeNoFrameskip-v4_Oct11_18-55-42"
 
 folder_path = os.path.join(os.getcwd(), "runs", data_path)
 path = os.path.join(folder_path, "hist_data.csv")
@@ -30,20 +25,20 @@ nov_vals_notT = []
 with open(path) as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
     for row in reader:
-        exp = row[4] + row[5]
-        if not exp in data.keys():
-            data[exp] = ([], [])
-        if 'True' in row[2]:
-            data[exp][0].append(float(row[1]))
-        else:
-            data[exp][1].append(float(row[1]))
-
-
-        # nov_vals.append(float(row[0]))
+        # exp = row[4] + row[5]
+        # if not exp in data.keys():
+        #     data[exp] = ([], [])
         # if 'True' in row[2]:
-        #     nov_vals_T.append(float(row[0]))
+        #     data[exp][0].append(float(row[1]))
         # else:
-        #     nov_vals_notT.append(float(row[0]))
+        #     data[exp][1].append(float(row[1]))
+
+
+        nov_vals.append(float(row[0]))
+        if 'True' in row[2]:
+            nov_vals_T.append(float(row[0]))
+        else:
+            nov_vals_notT.append(float(row[0]))
 
 
 def plot_data(data, color, **kwargs):
@@ -51,6 +46,14 @@ def plot_data(data, color, **kwargs):
     bincenters = 0.5 * (binEdges[1:] + binEdges[:-1])
     plt.plot(bincenters, y/float(len(data)), c=color, **kwargs)
 
+
+# seaborn.kdeplot(nov_vals)
+# plt.show()
+
+seaborn.kdeplot(nov_vals_T)
+seaborn.kdeplot(nov_vals_notT)
+plt.show()
+exit()
 
 # plot_data(nov_vals, 'blue')
 # plt.show()

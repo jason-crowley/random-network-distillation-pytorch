@@ -182,7 +182,7 @@ def main():
     def log_nov_data(all_traj, reward_rms, drn_model):
         for traj, info in all_traj:
             with torch.no_grad():
-                nov_vals = drn_model.get_nov_vals(traj)
+                nov_vals = drn_model.get_nov_vals(((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
                 nov_vals_norm = nov_vals / np.sqrt(reward_rms.var)
 
 
