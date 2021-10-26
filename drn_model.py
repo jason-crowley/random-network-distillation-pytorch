@@ -130,6 +130,11 @@ class DeepRelNov:
     def train_gaussian(self, traj):
         self.state_buff.extend(traj)
 
+    def get_nov_vals_for_gaussian(self, traj, obs_rms):
+        norm_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+        traj_novelties = self.nov_rnd.forward(norm_traj)
+        return traj_novelties
+
     def get_gaussian_nov_state(self, traj, obs_rms):
         norm_traj = ((traj - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
         norm_buff = ((self.state_buff - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)

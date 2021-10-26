@@ -161,6 +161,8 @@ def main():
     step_rewards = [[] for _ in range(num_worker)]
     global_ep = 0
 
+    nov_vals = []
+
     while True:
         total_state, total_reward, total_done, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
             [], [], [], [], [], [], [], [], [], []
@@ -185,9 +187,8 @@ def main():
                 next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
 
                 if global_step > 20000 and (d or rd):
-                    norm_states = ((trajectories[i] - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-                    drn_model.train_gaussian(norm_states)
-                    I, nov, obs, STD = drn_model.get_gaussian_nov_state(norm_states, obs_rms)
+                    drn_model.train_gaussian(trajectories[i])
+                    I, nov, obs, STD = drn_model.get_gaussian_nov_state(trajectories[i], obs_rms)
                     best_index = np.argmax(nov)
                     plt.imshow(np.reshape(obs[best_index],(84,84)))
                     plt.savefig(f"{subgoals_path}/plot_{global_step}_{i}_{STD[best_index]}.png")
