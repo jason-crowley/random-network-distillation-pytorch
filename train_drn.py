@@ -189,10 +189,11 @@ def main():
                 if global_step > 20000 and (d or rd):
                     drn_model.train_gaussian(trajectories[i])
                     I, nov, obs, STD = drn_model.get_gaussian_nov_state(trajectories[i], obs_rms)
-                    best_index = np.argmax(nov)
-                    plt.imshow(np.reshape(obs[best_index],(84,84)))
-                    plt.savefig(f"{subgoals_path}/plot_{global_step}_{i}_{STD[best_index]}.png")
-                    plt.cla()
+                    if len(nov) != 0:
+                        best_index = np.argmax(nov)
+                        plt.imshow(np.reshape(obs[best_index],(84,84)))
+                        plt.savefig(f"{subgoals_path}/plot_{global_step}_{i}_{STD[best_index]}.png")
+                        plt.cla()
 
                     trajectories[i] = []
 
