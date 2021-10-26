@@ -155,6 +155,8 @@ def main():
 
     accumulated_worker_episode_reward = np.zeros((num_worker,))
 
+    trajectories = [[] for _ in range(num_worker)]
+
     episode_rewards = [[] for _ in range(num_worker)]
     step_rewards = [[] for _ in range(num_worker)]
     global_ep = 0
@@ -173,7 +175,7 @@ def main():
                 parent_conn.send(action)
 
             next_states, rewards, dones, real_dones, log_rewards, next_obs = [], [], [], [], [], []
-            for parent_conn in parent_conns:
+            for i, parent_conn in enumerate(parent_conns):
                 s, r, d, rd, lr, _ = parent_conn.recv()
                 next_states.append(s)
                 rewards.append(r)
@@ -181,6 +183,19 @@ def main():
                 real_dones.append(rd)
                 log_rewards.append(lr)
                 next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
+
+                if global_step > 20000 and (d or rd):
+                    norm_states = ((trajectories[i] - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+                    drn_model.train_gaussian(norm_states)
+                    I, nov, obs, STD = drn_model.get_gaussian_nov_state(norm_states, obs_rms)
+                    best_index = np.argmax(nov)
+                    plt.imshow(np.reshape(obs[best_index],(84,84)))
+                    plt.savefig(f"{subgoals_path}/plot_{global_step}_{i}_{STD[best_index]}.png")
+                    plt.cla()
+
+                    trajectories[i] = []
+
+                trajectories[i].append(s[-1, :, :].reshape([1, 84, 84]))
 
             next_states = np.stack(next_states)
             rewards = np.hstack(rewards)
@@ -274,15 +289,6 @@ def main():
                           total_adv, ((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5),
                           total_policy)
 
-
-        drn_model.train_gaussian(total_next_obs)
-        if global_step > 10000:
-            I, nov, obs, STD = drn_model.get_gaussian_nov_state(total_next_obs, obs_rms)
-            print(STD)
-            for j, (ob, std) in enumerate(zip(obs,STD)):
-                plt.imshow(np.reshape(ob,(84,84)))
-                plt.savefig(f"{subgoals_path}/plot_{global_step}_{j}_{std}.png")
-                plt.cla()
 
         if global_step % (num_worker * num_step * 100) == 0:
             print('Now Global Step :{}'.format(global_step))
