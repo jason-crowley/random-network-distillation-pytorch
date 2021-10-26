@@ -186,9 +186,11 @@ def main():
                 log_rewards.append(lr)
                 next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
 
-                if global_step > 20000 and (d or rd):
+
+
+                if global_step > 10 and d:#10000 and (d or rd):
                     drn_model.train_gaussian(trajectories[i])
-                    I, nov, obs, STD = drn_model.get_gaussian_nov_state(trajectories[i], obs_rms)
+                    I, nov, obs, STD = drn_model.get_gaussian_nov_state(np.array(trajectories[i]), obs_rms)
                     if len(nov) != 0:
                         best_index = np.argmax(nov)
                         plt.imshow(np.reshape(obs[best_index],(84,84)))

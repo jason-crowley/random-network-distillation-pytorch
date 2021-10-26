@@ -148,6 +148,7 @@ class DeepRelNov:
         I = np.where(STD > 2)[0]
         if len(I) == 0:
             return [], [], [], []
+
         return I, traj_novelties[I], traj[I], STD[I]
         # max_nov_index = np.argmax(traj_novelties)
         # max_nov = traj_novelties[max_nov_index]
